@@ -2,6 +2,10 @@ use std::f32::consts::TAU;
 
 use bevy::prelude::*;
 
+mod maze;
+
+use maze::generate_walls;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -73,6 +77,15 @@ fn setup(
             ..avatar
         },
     ));
+
+    // Walls
+    generate_walls(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        -10..=10,
+        -10..=10,
+    );
 
     // Floor
     commands.spawn(PbrBundle {
