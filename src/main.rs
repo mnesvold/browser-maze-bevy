@@ -44,9 +44,15 @@ pub struct Avatar {
     facing: f32,
 }
 
+#[derive(Copy, Clone, Default, Component)]
+pub struct AvatarPitch {
+    /// `Avatar`-scoped rotation (radians below horizon).
+    pitch: f32,
+}
+
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 enum ViewMode {
-    Overhead,
+    FirstPerson,
     Map,
 }
 
@@ -126,12 +132,13 @@ fn setup(
 
     // Cameras
     commands.spawn((
-        RestrictToView(ViewMode::Overhead),
-        Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 6.0, 12.0)
-                .looking_at(Vec3::new(0., 1., 0.), Vec3::Y),
-            ..default()
+        RestrictToView(ViewMode::FirstPerson),
+        Camera3dBundle::default(),
+        Avatar {
+            pre_transform: Transform::from_xyz(0.0, 0.5, 0.0).looking_to(Vec3::Z, Vec3::Y),
+            ..avatar
         },
+        AvatarPitch::default(),
     ));
     commands.spawn((
         RestrictToView(ViewMode::Map),
@@ -150,7 +157,7 @@ fn setup(
     ));
 
     // UI settings
-    commands.insert_resource(CurrentView(ViewMode::Overhead));
+    commands.insert_resource(CurrentView(ViewMode::FirstPerson));
     commands.insert_resource(MouseGrabbed(false));
 }
 
@@ -158,7 +165,7 @@ fn map_user_input(
     keyboard: Res<Input<KeyCode>>,
     mouse: Res<Input<MouseButton>>,
     mut motion: EventReader<MouseMotion>,
-    mut avatars: Query<&mut Avatar>,
+    mut avatars: Query<(&mut Avatar, Option<&mut AvatarPitch>)>,
     mut windows: Query<&mut Window>,
     mut view: ResMut<CurrentView>,
     mut grabbed: ResMut<MouseGrabbed>,
@@ -166,7 +173,7 @@ fn map_user_input(
     view.set_if_neq(CurrentView(if keyboard.pressed(KeyCode::Tab) {
         ViewMode::Map
     } else {
-        ViewMode::Overhead
+        ViewMode::FirstPerson
     }));
     if mouse.just_pressed(MouseButton::Left) {
         for mut window in &mut windows {
@@ -204,28 +211,39 @@ fn map_user_input(
         0.0
     };
     let mut mouse_turn = 0.0;
+    let mut mouse_pitch = 0.0;
     if grabbed.0 {
         for event in motion.iter() {
             mouse_turn -= event.delta.x;
+            mouse_pitch += event.delta.y;
         }
     } else {
         motion.clear();
     }
-    for mut avatar in &mut avatars {
+    for (mut avatar, pitch) in &mut avatars {
         avatar.walking = walking;
         avatar.turning = turning + (mouse_turn * MOUSE_SENSITIVITY / avatar.turn_speed);
+        if let Some(mut pitch) = pitch {
+            pitch.pitch = (pitch.pitch + (mouse_pitch * 0.001)).clamp(-TAU / 4.0, TAU / 8.0);
+        }
     }
 }
 
-fn move_avatars(mut query: Query<(&mut Transform, &mut Avatar)>, time: Res<Time>) {
+fn move_avatars(
+    mut query: Query<(&mut Transform, &mut Avatar, Option<&AvatarPitch>)>,
+    time: Res<Time>,
+) {
     let delta_time = time.delta_seconds();
-    for (mut transform, mut avatar) in &mut query {
+    for (mut transform, mut avatar, pitch) in &mut query {
         avatar.facing += avatar.turning * avatar.turn_speed * delta_time;
         let unit_step = Quat::from_rotation_y(avatar.facing) * Vec3::Z;
         let step = unit_step * avatar.walk_speed * avatar.walking * delta_time;
         avatar.translation += step;
+        let pitch_transform = pitch
+            .map(|p| Quat::from_rotation_x(p.pitch))
+            .unwrap_or(Quat::IDENTITY);
         let avatar_transform = Transform::from_translation(avatar.translation)
-            .with_rotation(Quat::from_rotation_y(avatar.facing));
+            .with_rotation(Quat::from_rotation_y(avatar.facing) * pitch_transform);
         transform.set_if_neq(avatar_transform * avatar.pre_transform);
     }
 }
