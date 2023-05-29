@@ -6,6 +6,8 @@ mod maze;
 
 use maze::generate_walls;
 
+const SIDE_HALFLENGTH: i32 = 10;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -46,8 +48,12 @@ fn setup(
         turn_speed: TAU / 4.0,
         turning: 0.0,
         pre_transform: Transform::IDENTITY,
-        translation: Vec3::ZERO,
-        facing: 0.0,
+        translation: Vec3::new(
+            -SIDE_HALFLENGTH as f32 + 0.5,
+            0.0,
+            -SIDE_HALFLENGTH as f32 + 0.5,
+        ),
+        facing: TAU * 1. / 8.,
     };
     commands.spawn((
         PbrBundle {
@@ -83,13 +89,14 @@ fn setup(
         &mut commands,
         &mut meshes,
         &mut materials,
-        -10..=10,
-        -10..=10,
+        -SIDE_HALFLENGTH..=SIDE_HALFLENGTH,
+        -SIDE_HALFLENGTH..=SIDE_HALFLENGTH,
+        0xaaaaaaaa,
     );
 
     // Floor
     commands.spawn(PbrBundle {
-        mesh: meshes.add(shape::Plane::from_size(50.0).into()),
+        mesh: meshes.add(shape::Plane::from_size(SIDE_HALFLENGTH as f32 * 2.0).into()),
         material: materials.add(Color::SILVER.into()),
         ..default()
     });
