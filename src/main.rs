@@ -1,6 +1,6 @@
 use std::f32::consts::TAU;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, window::close_on_esc};
 
 mod maze;
 
@@ -12,6 +12,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup)
+        .add_system(close_on_esc)
         .add_system(map_keyboard_input)
         .add_system(move_avatars)
         .run();
@@ -43,7 +44,7 @@ fn setup(
 ) {
     // Player
     let avatar = Avatar {
-        walk_speed: 1.0 / 3.0,
+        walk_speed: 1.0,
         walking: 0.0,
         turn_speed: TAU / 4.0,
         turning: 0.0,
