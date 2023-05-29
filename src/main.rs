@@ -1,19 +1,25 @@
 use std::f32::consts::TAU;
 
-use bevy::{prelude::*, render::camera::ScalingMode, window::close_on_esc};
+use bevy::{
+    input::mouse::MouseMotion,
+    prelude::*,
+    render::camera::ScalingMode,
+    window::{close_on_esc, CursorGrabMode},
+};
 
 mod maze;
 
 use maze::generate_walls;
 
 const SIDE_HALFLENGTH: i32 = 10;
+const MOUSE_SENSITIVITY: f32 = 0.5;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup)
         .add_system(close_on_esc)
-        .add_system(map_keyboard_input)
+        .add_system(map_user_input)
         .add_system(move_avatars)
         .add_system(switch_camera)
         .run();
@@ -49,6 +55,9 @@ struct RestrictToView(ViewMode);
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, Resource)]
 struct CurrentView(ViewMode);
+
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, Resource)]
+struct MouseGrabbed(bool);
 
 fn setup(
     mut commands: Commands,
@@ -115,7 +124,7 @@ fn setup(
         ..default()
     });
 
-    // View mode and cameras
+    // Cameras
     commands.spawn((
         RestrictToView(ViewMode::Overhead),
         Camera3dBundle {
@@ -139,14 +148,39 @@ fn setup(
             ..default()
         },
     ));
+
+    // UI settings
     commands.insert_resource(CurrentView(ViewMode::Overhead));
+    commands.insert_resource(MouseGrabbed(false));
 }
 
-fn map_keyboard_input(
+fn map_user_input(
     keyboard: Res<Input<KeyCode>>,
+    mouse: Res<Input<MouseButton>>,
+    mut motion: EventReader<MouseMotion>,
     mut avatars: Query<&mut Avatar>,
+    mut windows: Query<&mut Window>,
     mut view: ResMut<CurrentView>,
+    mut grabbed: ResMut<MouseGrabbed>,
 ) {
+    view.set_if_neq(CurrentView(if keyboard.pressed(KeyCode::Tab) {
+        ViewMode::Map
+    } else {
+        ViewMode::Overhead
+    }));
+    if mouse.just_pressed(MouseButton::Left) {
+        for mut window in &mut windows {
+            let grab = window.cursor.grab_mode != CursorGrabMode::Locked;
+            window.cursor.grab_mode = if grab {
+                CursorGrabMode::Locked
+            } else {
+                CursorGrabMode::None
+            };
+            window.cursor.visible = !grab;
+            grabbed.set_if_neq(MouseGrabbed(grab));
+        }
+    }
+
     const WALK_FORWARD: [KeyCode; 3] = [KeyCode::W, KeyCode::Up, KeyCode::Comma];
     const WALK_BACKWARD: [KeyCode; 3] = [KeyCode::S, KeyCode::Down, KeyCode::O];
     const TURN_LEFT: [KeyCode; 2] = [KeyCode::A, KeyCode::Left];
@@ -169,15 +203,18 @@ fn map_keyboard_input(
     } else {
         0.0
     };
+    let mut mouse_turn = 0.0;
+    if grabbed.0 {
+        for event in motion.iter() {
+            mouse_turn -= event.delta.x;
+        }
+    } else {
+        motion.clear();
+    }
     for mut avatar in &mut avatars {
         avatar.walking = walking;
-        avatar.turning = turning;
+        avatar.turning = turning + (mouse_turn * MOUSE_SENSITIVITY / avatar.turn_speed);
     }
-    view.set_if_neq(CurrentView(if keyboard.pressed(KeyCode::Tab) {
-        ViewMode::Map
-    } else {
-        ViewMode::Overhead
-    }));
 }
 
 fn move_avatars(mut query: Query<(&mut Transform, &mut Avatar)>, time: Res<Time>) {
