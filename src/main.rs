@@ -17,6 +17,10 @@ pub struct Avatar {
     walk_speed: f32,
     /// Current speed as a multiple of `walk_speed`.
     walking: f32,
+    /// Potential turn speed (radians/sec).
+    turn_speed: f32,
+    /// Current turn speed as a multiple of `turn_speed`.
+    turning: f32,
     /// Object-specific transform to apply before `transform`. Not modified
     /// by any `Avatar`-wide systems.
     pre_transform: Transform,
@@ -35,6 +39,8 @@ fn setup(
     let avatar = Avatar {
         walk_speed: 1.0 / 3.0,
         walking: 0.0,
+        turn_speed: TAU / 4.0,
+        turning: 0.0,
         pre_transform: Transform::IDENTITY,
         translation: Vec3::ZERO,
         facing: 0.0,
@@ -85,6 +91,8 @@ fn setup(
 fn map_keyboard_input(keyboard: Res<Input<KeyCode>>, mut avatars: Query<&mut Avatar>) {
     const WALK_FORWARD: [KeyCode; 3] = [KeyCode::W, KeyCode::Up, KeyCode::Comma];
     const WALK_BACKWARD: [KeyCode; 3] = [KeyCode::S, KeyCode::Down, KeyCode::O];
+    const TURN_LEFT: [KeyCode; 2] = [KeyCode::A, KeyCode::Left];
+    const TURN_RIGHT: [KeyCode; 3] = [KeyCode::D, KeyCode::Right, KeyCode::E];
     let walking = if keyboard.any_pressed(WALK_FORWARD) {
         1.0
     } else {
@@ -94,18 +102,30 @@ fn map_keyboard_input(keyboard: Res<Input<KeyCode>>, mut avatars: Query<&mut Ava
     } else {
         0.0
     };
+    let turning = if keyboard.any_pressed(TURN_LEFT) {
+        1.0
+    } else {
+        0.0
+    } + if keyboard.any_pressed(TURN_RIGHT) {
+        -1.0
+    } else {
+        0.0
+    };
     for mut avatar in &mut avatars {
         avatar.walking = walking;
+        avatar.turning = turning;
     }
 }
 
 fn move_avatars(mut query: Query<(&mut Transform, &mut Avatar)>, time: Res<Time>) {
     let delta_time = time.delta_seconds();
     for (mut transform, mut avatar) in &mut query {
+        avatar.facing += avatar.turning * avatar.turn_speed * delta_time;
         let unit_step = Quat::from_rotation_y(avatar.facing) * Vec3::Z;
         let step = unit_step * avatar.walk_speed * avatar.walking * delta_time;
         avatar.translation += step;
-        transform
-            .set_if_neq(Transform::from_translation(avatar.translation) * avatar.pre_transform);
+        let avatar_transform = Transform::from_translation(avatar.translation)
+            .with_rotation(Quat::from_rotation_y(avatar.facing));
+        transform.set_if_neq(avatar_transform * avatar.pre_transform);
     }
 }
