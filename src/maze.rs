@@ -217,11 +217,20 @@ fn build_walls(
     );
     let corner_material = materials.add(Color::BLUE.into());
 
-    let wall_mesh = meshes.add(shape::Box::new(0.7, 0.2, 0.2).into());
+    let wall_mesh = meshes.add(
+        shape::Cylinder {
+            radius: 0.1,
+            height: 1.0,
+            resolution: 8,
+            segments: 1,
+        }
+        .into(),
+    );
     let wall_material = materials.add(Color::BLUE.into());
 
     for wall in walls.filter(|w| w.disposition == Disposition::Present) {
         let mut transform = Transform::from_xyz(wall.sw_corner.0 as _, 0.0, wall.sw_corner.1 as _);
+        transform.rotate_z(TAU / 4.0);
         match wall.orientation {
             WallOrientation::ParallelToX => {
                 transform.translation += Vec3::X * 0.5;
