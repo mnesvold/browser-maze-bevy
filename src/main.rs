@@ -1,6 +1,6 @@
 use std::f32::consts::TAU;
 
-use bevy::{prelude::*, window::close_on_esc};
+use bevy::{prelude::*, render::camera::ScalingMode, window::close_on_esc};
 
 mod maze;
 
@@ -15,6 +15,7 @@ fn main() {
         .add_system(close_on_esc)
         .add_system(map_keyboard_input)
         .add_system(move_avatars)
+        .add_system(switch_camera)
         .run();
 }
 
@@ -36,6 +37,18 @@ pub struct Avatar {
     /// `Avatar`-scoped rotation (radians ccw from looking in the positive `Z` direction).
     facing: f32,
 }
+
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+enum ViewMode {
+    Overhead,
+    Map,
+}
+
+#[derive(Component)]
+struct RestrictToView(ViewMode);
+
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, Resource)]
+struct CurrentView(ViewMode);
 
 fn setup(
     mut commands: Commands,
@@ -102,14 +115,38 @@ fn setup(
         ..default()
     });
 
-    // Camera
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 6.0, 12.0).looking_at(Vec3::new(0., 1., 0.), Vec3::Y),
-        ..default()
-    });
+    // View mode and cameras
+    commands.spawn((
+        RestrictToView(ViewMode::Overhead),
+        Camera3dBundle {
+            transform: Transform::from_xyz(0.0, 6.0, 12.0)
+                .looking_at(Vec3::new(0., 1., 0.), Vec3::Y),
+            ..default()
+        },
+    ));
+    commands.spawn((
+        RestrictToView(ViewMode::Map),
+        Camera3dBundle {
+            projection: Projection::Orthographic(OrthographicProjection {
+                scaling_mode: ScalingMode::AutoMin {
+                    min_width: SIDE_HALFLENGTH as f32 * 2.0,
+                    min_height: SIDE_HALFLENGTH as f32 * 2.0,
+                },
+                scale: 1.0,
+                ..default()
+            }),
+            transform: Transform::from_xyz(0.0, 10.0, 0.0).looking_at(Vec3::ZERO, Vec3::X),
+            ..default()
+        },
+    ));
+    commands.insert_resource(CurrentView(ViewMode::Overhead));
 }
 
-fn map_keyboard_input(keyboard: Res<Input<KeyCode>>, mut avatars: Query<&mut Avatar>) {
+fn map_keyboard_input(
+    keyboard: Res<Input<KeyCode>>,
+    mut avatars: Query<&mut Avatar>,
+    mut view: ResMut<CurrentView>,
+) {
     const WALK_FORWARD: [KeyCode; 3] = [KeyCode::W, KeyCode::Up, KeyCode::Comma];
     const WALK_BACKWARD: [KeyCode; 3] = [KeyCode::S, KeyCode::Down, KeyCode::O];
     const TURN_LEFT: [KeyCode; 2] = [KeyCode::A, KeyCode::Left];
@@ -136,6 +173,11 @@ fn map_keyboard_input(keyboard: Res<Input<KeyCode>>, mut avatars: Query<&mut Ava
         avatar.walking = walking;
         avatar.turning = turning;
     }
+    view.set_if_neq(CurrentView(if keyboard.pressed(KeyCode::Tab) {
+        ViewMode::Map
+    } else {
+        ViewMode::Overhead
+    }));
 }
 
 fn move_avatars(mut query: Query<(&mut Transform, &mut Avatar)>, time: Res<Time>) {
@@ -148,5 +190,14 @@ fn move_avatars(mut query: Query<(&mut Transform, &mut Avatar)>, time: Res<Time>
         let avatar_transform = Transform::from_translation(avatar.translation)
             .with_rotation(Quat::from_rotation_y(avatar.facing));
         transform.set_if_neq(avatar_transform * avatar.pre_transform);
+    }
+}
+
+fn switch_camera(current: Res<CurrentView>, mut cameras: Query<(&mut Camera, &RestrictToView)>) {
+    if !(current.is_added() || current.is_changed()) {
+        return;
+    }
+    for (mut camera, restriction) in &mut cameras {
+        camera.is_active = restriction.0 == current.0;
     }
 }
