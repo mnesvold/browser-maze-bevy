@@ -40,13 +40,6 @@ pub struct Avatar {
     turn_speed: f32,
     /// Current turn speed as a multiple of `turn_speed`.
     turning: f32,
-    /// Object-specific transform to apply before `transform`. Not modified
-    /// by any `Avatar`-wide systems.
-    pre_transform: Transform,
-    /// `Avatar`-scoped translation from the origin.
-    translation: Vec3,
-    /// `Avatar`-scoped rotation (radians ccw from looking in the positive `Z` direction).
-    facing: f32,
 }
 
 #[derive(Copy, Clone, Default, Component)]
@@ -76,47 +69,54 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // Player
-    let avatar = Avatar {
-        walk_speed: ROOM_SIDE_LENGTH * 1.3,
-        walking: 0.0,
-        turn_speed: TAU / 4.0,
-        turning: 0.0,
-        pre_transform: Transform::IDENTITY,
-        translation: Vec3::new(
-            (-SIDE_HALFLENGTH as f32 + 0.5) * ROOM_SIDE_LENGTH,
-            0.0,
-            (-SIDE_HALFLENGTH as f32 + 0.5) * ROOM_SIDE_LENGTH,
-        ),
-        facing: TAU * 1. / 8.,
-    };
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(shape::RegularPolygon::new(0.5, 3).into()),
-            material: materials.add(Color::BLUE.into()),
-            ..default()
-        },
-        Avatar {
-            pre_transform: Transform::from_rotation(
-                Quat::from_rotation_y(TAU / 6.0) * Quat::from_rotation_x(-TAU / 4.0),
-            )
-            .with_translation(Vec3::Y * 0.1),
-            ..avatar
-        },
-    ));
-    commands.spawn((
-        PointLightBundle {
-            point_light: PointLight {
-                intensity: 450.0,
+    commands
+        .spawn((
+            Avatar {
+                walk_speed: ROOM_SIDE_LENGTH * 1.3,
+                walking: 0.0,
+                turn_speed: TAU / 4.0,
+                turning: 0.0,
+            },
+            SpatialBundle {
+                transform: Transform {
+                    translation: Vec3::new(
+                        (-SIDE_HALFLENGTH as f32 + 0.5) * ROOM_SIDE_LENGTH,
+                        0.0,
+                        (-SIDE_HALFLENGTH as f32 + 0.5) * ROOM_SIDE_LENGTH,
+                    ),
+                    rotation: Quat::from_rotation_y(TAU * 1. / 8.),
+                    ..default()
+                },
                 ..default()
             },
-            transform: Transform::from_xyz(0.0, 1.0, 0.0),
-            ..default()
-        },
-        Avatar {
-            pre_transform: Transform::from_xyz(0.0, 1.0, 0.0),
-            ..avatar
-        },
-    ));
+        ))
+        .with_children(|children| {
+            children.spawn(PbrBundle {
+                mesh: meshes.add(shape::RegularPolygon::new(0.5, 3).into()),
+                material: materials.add(Color::BLUE.into()),
+                transform: Transform::from_rotation(
+                    Quat::from_rotation_y(TAU / 6.0) * Quat::from_rotation_x(-TAU / 4.0),
+                )
+                .with_translation(Vec3::Y * 0.1),
+                ..default()
+            });
+            children.spawn(PointLightBundle {
+                point_light: PointLight {
+                    intensity: 450.0,
+                    ..default()
+                },
+                transform: Transform::from_xyz(0.0, 1.0, 0.0),
+                ..default()
+            });
+            children.spawn((
+                RestrictToView(ViewMode::FirstPerson),
+                Camera3dBundle {
+                    transform: Transform::from_xyz(0.0, 0.5, 0.0).looking_to(Vec3::Z, Vec3::Y),
+                    ..default()
+                },
+                AvatarPitch::default(),
+            ));
+        });
 
     // Walls
     generate_walls(
@@ -141,15 +141,6 @@ fn setup(
     });
 
     // Cameras
-    commands.spawn((
-        RestrictToView(ViewMode::FirstPerson),
-        Camera3dBundle::default(),
-        Avatar {
-            pre_transform: Transform::from_xyz(0.0, 0.5, 0.0).looking_to(Vec3::Z, Vec3::Y),
-            ..avatar
-        },
-        AvatarPitch::default(),
-    ));
     commands.spawn((
         RestrictToView(ViewMode::Map),
         Camera3dBundle {
@@ -240,21 +231,26 @@ fn map_user_input(
 }
 
 fn move_avatars(
-    mut query: Query<(&mut Transform, &mut Avatar, Option<&AvatarPitch>)>,
+    mut query: Query<(&mut Transform, &Avatar, Option<&AvatarPitch>)>,
     time: Res<Time>,
 ) {
     let delta_time = time.delta_seconds();
-    for (mut transform, mut avatar, pitch) in &mut query {
-        avatar.facing += avatar.turning * avatar.turn_speed * delta_time;
-        let unit_step = Quat::from_rotation_y(avatar.facing) * Vec3::Z;
+    for (mut transform, avatar, pitch) in &mut query {
+        let (current_yaw, current_pitch, current_roll) = transform.rotation.to_euler(EulerRot::YXZ);
+        assert_eq!(current_roll, 0.0);
+
+        let unit_step = Quat::from_rotation_y(current_yaw) * Vec3::Z;
         let step = unit_step * avatar.walk_speed * avatar.walking * delta_time;
-        avatar.translation += step;
-        let pitch_transform = pitch
-            .map(|p| Quat::from_rotation_x(p.pitch))
-            .unwrap_or(Quat::IDENTITY);
-        let avatar_transform = Transform::from_translation(avatar.translation)
-            .with_rotation(Quat::from_rotation_y(avatar.facing) * pitch_transform);
-        transform.set_if_neq(avatar_transform * avatar.pre_transform);
+        transform.translation += step;
+
+        let delta_yaw = avatar.turning * avatar.turn_speed * delta_time;
+        let delta_pitch = pitch.map(|p| p.pitch).unwrap_or(0.0);
+        transform.rotation = Quat::from_euler(
+            EulerRot::YXZ,
+            current_yaw + delta_yaw,
+            current_pitch + delta_pitch,
+            0.0,
+        );
     }
 }
 
