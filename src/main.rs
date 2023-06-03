@@ -9,9 +9,14 @@ use bevy::{
 
 mod maze;
 
-use maze::generate_walls;
+use maze::{generate_walls, Sizes};
 
+/// How many rooms per half-side of the maze?
 const SIDE_HALFLENGTH: i32 = 10;
+
+/// How big is each room?
+const ROOM_SIDE_LENGTH: f32 = 2.0;
+
 const MOUSE_SENSITIVITY: f32 = 0.5;
 
 fn main() {
@@ -72,15 +77,15 @@ fn setup(
 ) {
     // Player
     let avatar = Avatar {
-        walk_speed: 1.0,
+        walk_speed: ROOM_SIDE_LENGTH * 1.3,
         walking: 0.0,
         turn_speed: TAU / 4.0,
         turning: 0.0,
         pre_transform: Transform::IDENTITY,
         translation: Vec3::new(
-            -SIDE_HALFLENGTH as f32 + 0.5,
+            (-SIDE_HALFLENGTH as f32 + 0.5) * ROOM_SIDE_LENGTH,
             0.0,
-            -SIDE_HALFLENGTH as f32 + 0.5,
+            (-SIDE_HALFLENGTH as f32 + 0.5) * ROOM_SIDE_LENGTH,
         ),
         facing: TAU * 1. / 8.,
     };
@@ -121,11 +126,16 @@ fn setup(
         -SIDE_HALFLENGTH..=SIDE_HALFLENGTH,
         -SIDE_HALFLENGTH..=SIDE_HALFLENGTH,
         0xaaaaaaaa,
+        &Sizes {
+            room_side_length: ROOM_SIDE_LENGTH,
+            wall_radius: 0.1,
+        },
     );
 
     // Floor
     commands.spawn(PbrBundle {
-        mesh: meshes.add(shape::Plane::from_size(SIDE_HALFLENGTH as f32 * 2.0).into()),
+        mesh: meshes
+            .add(shape::Plane::from_size(SIDE_HALFLENGTH as f32 * 2.0 * ROOM_SIDE_LENGTH).into()),
         material: materials.add(Color::SILVER.into()),
         ..default()
     });
@@ -145,8 +155,8 @@ fn setup(
         Camera3dBundle {
             projection: Projection::Orthographic(OrthographicProjection {
                 scaling_mode: ScalingMode::AutoMin {
-                    min_width: SIDE_HALFLENGTH as f32 * 2.0,
-                    min_height: SIDE_HALFLENGTH as f32 * 2.0,
+                    min_width: SIDE_HALFLENGTH as f32 * 2.0 * ROOM_SIDE_LENGTH,
+                    min_height: SIDE_HALFLENGTH as f32 * 2.0 * ROOM_SIDE_LENGTH,
                 },
                 scale: 1.0,
                 ..default()

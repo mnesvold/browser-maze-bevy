@@ -35,6 +35,12 @@ enum Disposition {
     Unknown,
 }
 
+#[derive(Debug)]
+pub struct Sizes {
+    pub room_side_length: f32,
+    pub wall_radius: f32,
+}
+
 pub fn generate_walls(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -42,6 +48,7 @@ pub fn generate_walls(
     x_range: RangeInclusive<i32>,
     z_range: RangeInclusive<i32>,
     seed: u64,
+    sizes: &Sizes,
 ) {
     let border_walls = iter_border_walls(x_range.clone(), z_range.clone());
     let graph = choose_walls(x_range.clone(), z_range.clone(), seed);
@@ -53,6 +60,7 @@ pub fn generate_walls(
         x_range,
         z_range,
         border_walls.chain(inner_walls),
+        sizes,
     );
 }
 
@@ -193,23 +201,14 @@ fn build_walls(
     x_range: RangeInclusive<i32>,
     z_range: RangeInclusive<i32>,
     walls: impl Iterator<Item = Wall>,
+    sizes: &Sizes,
 ) {
     let (x_min, x_max) = (*x_range.start(), *x_range.end());
     let (z_min, z_max) = (*z_range.start(), *z_range.end());
 
-    let mut graph = Graph::<Room, Wall>::new();
-    for x in x_min..x_max {
-        for z in z_min..z_max {
-            graph.add_node(Room {
-                west_edge: x,
-                south_edge: z,
-            });
-        }
-    }
-
     let corner_mesh = meshes.add(
         shape::UVSphere {
-            radius: 0.1,
+            radius: sizes.wall_radius,
             sectors: 8,
             stacks: 8,
         }
@@ -219,8 +218,8 @@ fn build_walls(
 
     let wall_mesh = meshes.add(
         shape::Cylinder {
-            radius: 0.1,
-            height: 1.0,
+            radius: sizes.wall_radius,
+            height: sizes.room_side_length,
             resolution: 8,
             segments: 1,
         }
@@ -229,14 +228,18 @@ fn build_walls(
     let wall_material = materials.add(Color::BLUE.into());
 
     for wall in walls.filter(|w| w.disposition == Disposition::Present) {
-        let mut transform = Transform::from_xyz(wall.sw_corner.0 as _, 0.0, wall.sw_corner.1 as _);
+        let mut transform = Transform::from_xyz(
+            wall.sw_corner.0 as f32 * sizes.room_side_length,
+            0.0,
+            wall.sw_corner.1 as f32 * sizes.room_side_length,
+        );
         transform.rotate_z(TAU / 4.0);
         match wall.orientation {
             WallOrientation::ParallelToX => {
-                transform.translation += Vec3::X * 0.5;
+                transform.translation += Vec3::X * sizes.room_side_length * 0.5;
             }
             WallOrientation::ParallelToZ => {
-                transform.translation += Vec3::Z * 0.5;
+                transform.translation += Vec3::Z * sizes.room_side_length * 0.5;
                 transform.rotate_y(TAU / 4.0);
             }
         }
@@ -254,7 +257,11 @@ fn build_walls(
             commands.spawn(PbrBundle {
                 mesh: corner_mesh.clone(),
                 material: corner_material.clone(),
-                transform: Transform::from_xyz(x as _, 0.0, z as _),
+                transform: Transform::from_xyz(
+                    x as f32 * sizes.room_side_length,
+                    0.0,
+                    z as f32 * sizes.room_side_length,
+                ),
                 ..default()
             });
         }
