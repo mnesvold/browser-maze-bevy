@@ -68,6 +68,20 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    // Walls
+    let spawns = generate_walls(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        -SIDE_HALFLENGTH..=SIDE_HALFLENGTH,
+        -SIDE_HALFLENGTH..=SIDE_HALFLENGTH,
+        0xaaaaaaaa,
+        &Sizes {
+            room_side_length: ROOM_SIDE_LENGTH,
+            wall_radius: 0.1,
+        },
+    );
+
     // Player
     commands
         .spawn((
@@ -80,9 +94,9 @@ fn setup(
             SpatialBundle {
                 transform: Transform {
                     translation: Vec3::new(
-                        (-SIDE_HALFLENGTH as f32 + 0.5) * ROOM_SIDE_LENGTH,
+                        (spawns.start.west_edge as f32 + 0.5) * ROOM_SIDE_LENGTH,
                         0.0,
-                        (-SIDE_HALFLENGTH as f32 + 0.5) * ROOM_SIDE_LENGTH,
+                        (spawns.start.south_edge as f32 + 0.5) * ROOM_SIDE_LENGTH,
                     ),
                     rotation: Quat::from_rotation_y(TAU * 1. / 8.),
                     ..default()
@@ -118,19 +132,40 @@ fn setup(
             ));
         });
 
-    // Walls
-    generate_walls(
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        -SIDE_HALFLENGTH..=SIDE_HALFLENGTH,
-        -SIDE_HALFLENGTH..=SIDE_HALFLENGTH,
-        0xaaaaaaaa,
-        &Sizes {
-            room_side_length: ROOM_SIDE_LENGTH,
-            wall_radius: 0.1,
-        },
-    );
+    // Goal
+    commands
+        .spawn(SpatialBundle {
+            transform: Transform::from_xyz(
+                (spawns.goal.west_edge as f32 + 0.5) * ROOM_SIDE_LENGTH,
+                0.0,
+                (spawns.goal.south_edge as f32 + 0.5) * ROOM_SIDE_LENGTH,
+            ),
+            ..default()
+        })
+        .with_children(|children| {
+            children.spawn(PbrBundle {
+                mesh: meshes.add(
+                    shape::Torus {
+                        radius: ROOM_SIDE_LENGTH * 0.8 / 2.0,
+                        ring_radius: 0.1,
+                        subdivisions_segments: 7,
+                        subdivisions_sides: 7,
+                    }
+                    .into(),
+                ),
+                material: materials.add(Color::GOLD.into()),
+                ..default()
+            });
+            children.spawn(PointLightBundle {
+                point_light: PointLight {
+                    color: Color::GOLD,
+                    intensity: 450.0,
+                    ..default()
+                },
+                transform: Transform::from_xyz(0.0, 1.0, 0.0),
+                ..default()
+            });
+        });
 
     // Floor
     commands.spawn(PbrBundle {

@@ -4,15 +4,15 @@ use bevy::{
     prelude::*,
     utils::{HashMap, HashSet},
 };
-use petgraph::{graph::NodeIndex, Graph, Undirected};
+use petgraph::{algo::floyd_warshall, graph::NodeIndex, Graph, Undirected};
 use rand::{rngs::SmallRng, seq::IteratorRandom, SeedableRng};
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-struct Room {
+pub struct Room {
     // The lower bound of this room's `x` coordinates.
-    west_edge: i32,
+    pub west_edge: i32,
     // The lower bound of this room`s `z` coordinates.
-    south_edge: i32,
+    pub south_edge: i32,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -41,6 +41,12 @@ pub struct Sizes {
     pub wall_radius: f32,
 }
 
+#[derive(Debug)]
+pub struct SpawnPositions {
+    pub start: Room,
+    pub goal: Room,
+}
+
 pub fn generate_walls(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -49,7 +55,7 @@ pub fn generate_walls(
     z_range: RangeInclusive<i32>,
     seed: u64,
     sizes: &Sizes,
-) {
+) -> SpawnPositions {
     let border_walls = iter_border_walls(x_range.clone(), z_range.clone());
     let graph = choose_walls(x_range.clone(), z_range.clone(), seed);
     let inner_walls = graph.edge_weights().copied();
@@ -62,6 +68,7 @@ pub fn generate_walls(
         border_walls.chain(inner_walls),
         sizes,
     );
+    choose_spawn_positions(&graph)
 }
 
 fn iter_border_walls(
@@ -192,6 +199,25 @@ fn choose_walls(
     assert!(rooms_in_progress.is_empty());
 
     graph
+}
+
+fn choose_spawn_positions(graph: &Graph<Room, Wall, Undirected>) -> SpawnPositions {
+    // To keep things interesting, we want to choose two rooms that are as far
+    // away as possible (in terms of path length, not Euclidean distance).
+
+    let distances = floyd_warshall(graph, |edge_ref| {
+        if edge_ref.weight().disposition == Disposition::Absent {
+            1
+        } else {
+            i32::MAX
+        }
+    })
+    .unwrap();
+    let ((start_index, goal_index), _distance) =
+        distances.iter().max_by_key(|item| *item.1).unwrap();
+    let start = *graph.node_weight(*start_index).unwrap();
+    let goal = *graph.node_weight(*goal_index).unwrap();
+    SpawnPositions { start, goal }
 }
 
 fn build_walls(
