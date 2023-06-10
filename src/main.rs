@@ -27,8 +27,9 @@ fn main() {
         .add_startup_system(setup)
         .add_system(close_on_esc)
         .add_system(map_user_input)
-        .add_system(move_avatars)
+        .add_system(move_avatars.in_schedule(CoreSchedule::FixedUpdate))
         .add_system(switch_camera)
+        .insert_resource(FixedTime::new_from_secs(1.0 / 60.0))
         .run();
 }
 
