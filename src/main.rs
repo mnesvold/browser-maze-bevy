@@ -9,6 +9,10 @@ use bevy::{
 
 mod maze;
 
+use bevy_rapier3d::{
+    prelude::{NoUserData, RapierPhysicsPlugin},
+    render::RapierDebugRenderPlugin,
+};
 use maze::{generate_walls, Sizes};
 
 /// How many rooms per half-side of the maze?
@@ -22,6 +26,8 @@ const MOUSE_SENSITIVITY: f32 = 0.5;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugin(RapierDebugRenderPlugin::default())
         .add_startup_system(setup)
         .add_system(close_on_esc)
         .add_system(map_user_input)
