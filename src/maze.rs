@@ -4,6 +4,7 @@ use bevy::{
     prelude::*,
     utils::{HashMap, HashSet},
 };
+use bevy_rapier3d::prelude::*;
 use petgraph::{algo::floyd_warshall, graph::NodeIndex, Graph, Undirected};
 use rand::{rngs::SmallRng, seq::IteratorRandom, SeedableRng};
 
@@ -270,26 +271,32 @@ fn build_walls(
             }
         }
 
-        commands.spawn(PbrBundle {
-            mesh: wall_mesh.clone(),
-            material: wall_material.clone(),
-            transform,
-            ..default()
-        });
+        commands.spawn((
+            PbrBundle {
+                mesh: wall_mesh.clone(),
+                material: wall_material.clone(),
+                transform,
+                ..default()
+            },
+            Collider::cylinder(sizes.room_side_length * 0.5, sizes.wall_radius),
+        ));
     }
 
     for x in x_min..=x_max {
         for z in z_min..=z_max {
-            commands.spawn(PbrBundle {
-                mesh: corner_mesh.clone(),
-                material: corner_material.clone(),
-                transform: Transform::from_xyz(
-                    x as f32 * sizes.room_side_length,
-                    0.0,
-                    z as f32 * sizes.room_side_length,
-                ),
-                ..default()
-            });
+            commands.spawn((
+                PbrBundle {
+                    mesh: corner_mesh.clone(),
+                    material: corner_material.clone(),
+                    transform: Transform::from_xyz(
+                        x as f32 * sizes.room_side_length,
+                        0.0,
+                        z as f32 * sizes.room_side_length,
+                    ),
+                    ..default()
+                },
+                Collider::ball(sizes.wall_radius),
+            ));
         }
     }
 }

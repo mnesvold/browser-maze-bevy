@@ -9,6 +9,7 @@ use bevy::{
 
 mod maze;
 
+use bevy_rapier3d::prelude::*;
 use maze::{generate_walls, Sizes};
 
 /// How many rooms per half-side of the maze?
@@ -22,11 +23,13 @@ const MOUSE_SENSITIVITY: f32 = 0.5;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_startup_system(setup)
         .add_system(close_on_esc)
         .add_system(map_user_input)
-        .add_system(move_avatars)
+        .add_system(move_avatars.in_schedule(CoreSchedule::FixedUpdate))
         .add_system(switch_camera)
+        .insert_resource(FixedTime::new_from_secs(1.0 / 60.0))
         .run();
 }
 
@@ -268,15 +271,52 @@ fn map_user_input(
 fn move_avatars(
     mut query: Query<(&mut Transform, &Avatar, Option<&AvatarPitch>)>,
     time: Res<Time>,
+    mut rapier: ResMut<RapierContext>,
 ) {
     let delta_time = time.delta_seconds();
+    let avatar_collider = Collider::cylinder(0.5, 0.4);
     for (mut transform, avatar, pitch) in &mut query {
         let (current_yaw, current_pitch, current_roll) = transform.rotation.to_euler(EulerRot::YXZ);
         assert_eq!(current_roll, 0.0);
 
         let unit_step = Quat::from_rotation_y(current_yaw) * Vec3::Z;
         let step = unit_step * avatar.walk_speed * avatar.walking * delta_time;
-        transform.translation += step;
+        if step != Vec3::ZERO {
+            let mut move_shape = |step: Vec3| -> Vec3 {
+                rapier
+                    .move_shape(
+                        step,
+                        &avatar_collider,
+                        transform.translation,
+                        transform.rotation,
+                        1.0,
+                        &MoveShapeOptions {
+                            up: Vec3::Y,
+                            offset: CharacterLength::Relative(0.1),
+                            slide: false,
+                            autostep: None,
+                            max_slope_climb_angle: TAU / 8.0,
+                            min_slope_slide_angle: 0.0,
+                            apply_impulse_to_dynamic_bodies: false,
+                            snap_to_ground: None,
+                        },
+                        QueryFilter::default(),
+                        |_| {},
+                    )
+                    .effective_translation
+            };
+            // First, try to move along the full step.  If that would produce an
+            // effective-movement of ZERO, try again by only moving along the X
+            // axis, then again by only moving along the Z axis.
+            let candidate_steps = [step, step * Vec3::X, step * Vec3::Z];
+            for candidate_step in candidate_steps {
+                let effective = move_shape(candidate_step);
+                if effective.length() > 0.01 {
+                    transform.translation += effective;
+                    break;
+                }
+            }
+        }
 
         let delta_yaw = avatar.turning * avatar.turn_speed * delta_time;
         let delta_pitch = pitch.map(|p| p.pitch).unwrap_or(0.0);
