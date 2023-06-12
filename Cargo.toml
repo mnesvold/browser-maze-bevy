@@ -2,6 +2,8 @@
 name = "browser-maze-bevy"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+publish = false
 
 [dependencies]
 bevy = { version = "0.10.1", features = ["dynamic_linking"] }
