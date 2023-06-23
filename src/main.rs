@@ -25,6 +25,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_startup_system(setup)
+        .add_system(reset_maze.run_if(resource_exists_and_equals(MazeNeedsReset(true))))
         .add_system(close_on_esc)
         .add_system(map_user_input)
         .add_system(move_avatars.in_schedule(CoreSchedule::FixedUpdate))
@@ -51,11 +52,17 @@ pub struct AvatarPitch {
     pitch: f32,
 }
 
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, Resource)]
+struct MazeNeedsReset(bool);
+
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 enum ViewMode {
     FirstPerson,
     Map,
 }
+
+#[derive(Component)]
+struct MazeRoot;
 
 #[derive(Component)]
 struct RestrictToView(ViewMode);
@@ -71,20 +78,6 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // Walls
-    let spawns = generate_walls(
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        -SIDE_HALFLENGTH..=SIDE_HALFLENGTH,
-        -SIDE_HALFLENGTH..=SIDE_HALFLENGTH,
-        0xaaaaaaaa,
-        &Sizes {
-            room_side_length: ROOM_SIDE_LENGTH,
-            wall_radius: 0.1,
-        },
-    );
-
     // Player
     commands
         .spawn((
@@ -94,18 +87,7 @@ fn setup(
                 turn_speed: TAU / 4.0,
                 turning: 0.0,
             },
-            SpatialBundle {
-                transform: Transform {
-                    translation: Vec3::new(
-                        (spawns.start.west_edge as f32 + 0.5) * ROOM_SIDE_LENGTH,
-                        0.0,
-                        (spawns.start.south_edge as f32 + 0.5) * ROOM_SIDE_LENGTH,
-                    ),
-                    rotation: Quat::from_rotation_y(TAU * 1. / 8.),
-                    ..default()
-                },
-                ..default()
-            },
+            SpatialBundle::default(),
         ))
         .with_children(|children| {
             children.spawn(PbrBundle {
@@ -133,41 +115,6 @@ fn setup(
                 },
                 AvatarPitch::default(),
             ));
-        });
-
-    // Goal
-    commands
-        .spawn(SpatialBundle {
-            transform: Transform::from_xyz(
-                (spawns.goal.west_edge as f32 + 0.5) * ROOM_SIDE_LENGTH,
-                0.0,
-                (spawns.goal.south_edge as f32 + 0.5) * ROOM_SIDE_LENGTH,
-            ),
-            ..default()
-        })
-        .with_children(|children| {
-            children.spawn(PbrBundle {
-                mesh: meshes.add(
-                    shape::Torus {
-                        radius: ROOM_SIDE_LENGTH * 0.8 / 2.0,
-                        ring_radius: 0.1,
-                        subdivisions_segments: 7,
-                        subdivisions_sides: 7,
-                    }
-                    .into(),
-                ),
-                material: materials.add(Color::GOLD.into()),
-                ..default()
-            });
-            children.spawn(PointLightBundle {
-                point_light: PointLight {
-                    color: Color::GOLD,
-                    intensity: 450.0,
-                    ..default()
-                },
-                transform: Transform::from_xyz(0.0, 1.0, 0.0),
-                ..default()
-            });
         });
 
     // Floor
@@ -198,11 +145,93 @@ fn setup(
     // UI settings
     commands.insert_resource(CurrentView(ViewMode::FirstPerson));
     commands.insert_resource(MouseGrabbed(false));
+
+    // Request the first maze
+    commands.insert_resource(MazeNeedsReset(true));
 }
 
+fn reset_maze(
+    mut commands: Commands,
+    old_mazes: Query<Entity, With<MazeRoot>>,
+    mut reset_request: ResMut<MazeNeedsReset>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut avatars: Query<&mut Transform, With<Avatar>>,
+) {
+    for m in &old_mazes {
+        commands.entity(m).despawn_recursive();
+    }
+
+    *reset_request = MazeNeedsReset(false);
+
+    commands
+        .spawn((MazeRoot, SpatialBundle::default()))
+        .with_children(|commands| {
+            // Walls
+            let spawns = generate_walls(
+                commands,
+                &mut meshes,
+                &mut materials,
+                -SIDE_HALFLENGTH..=SIDE_HALFLENGTH,
+                -SIDE_HALFLENGTH..=SIDE_HALFLENGTH,
+                0xaaaaaaaa,
+                &Sizes {
+                    room_side_length: ROOM_SIDE_LENGTH,
+                    wall_radius: 0.1,
+                },
+            );
+
+            for mut avatar_tranform in &mut avatars {
+                avatar_tranform.translation = Vec3::new(
+                    (spawns.start.west_edge as f32 + 0.5) * ROOM_SIDE_LENGTH,
+                    0.0,
+                    (spawns.start.south_edge as f32 + 0.5) * ROOM_SIDE_LENGTH,
+                );
+                avatar_tranform.rotation = Quat::from_rotation_y(TAU * 1. / 8.);
+            }
+
+            // Goal
+            commands
+                .spawn(SpatialBundle {
+                    transform: Transform::from_xyz(
+                        (spawns.goal.west_edge as f32 + 0.5) * ROOM_SIDE_LENGTH,
+                        0.0,
+                        (spawns.goal.south_edge as f32 + 0.5) * ROOM_SIDE_LENGTH,
+                    ),
+                    ..default()
+                })
+                .with_children(|children| {
+                    children.spawn(PbrBundle {
+                        mesh: meshes.add(
+                            shape::Torus {
+                                radius: ROOM_SIDE_LENGTH * 0.8 / 2.0,
+                                ring_radius: 0.1,
+                                subdivisions_segments: 7,
+                                subdivisions_sides: 7,
+                            }
+                            .into(),
+                        ),
+                        material: materials.add(Color::GOLD.into()),
+                        ..default()
+                    });
+                    children.spawn(PointLightBundle {
+                        point_light: PointLight {
+                            color: Color::GOLD,
+                            intensity: 450.0,
+                            ..default()
+                        },
+                        transform: Transform::from_xyz(0.0, 1.0, 0.0),
+                        ..default()
+                    });
+                });
+        });
+}
+
+#[allow(clippy::too_many_arguments)]
 fn map_user_input(
     keyboard: Res<Input<KeyCode>>,
     mouse: Res<Input<MouseButton>>,
+    mut reset_request: ResMut<MazeNeedsReset>,
     mut motion: EventReader<MouseMotion>,
     mut avatars: Query<(&mut Avatar, Option<&mut AvatarPitch>)>,
     mut windows: Query<&mut Window>,
@@ -231,6 +260,7 @@ fn map_user_input(
     const WALK_BACKWARD: [KeyCode; 3] = [KeyCode::S, KeyCode::Down, KeyCode::O];
     const TURN_LEFT: [KeyCode; 2] = [KeyCode::A, KeyCode::Left];
     const TURN_RIGHT: [KeyCode; 3] = [KeyCode::D, KeyCode::Right, KeyCode::E];
+    const RESET_MAZE: [KeyCode; 2] = [KeyCode::R, KeyCode::P];
     let walking = if keyboard.any_pressed(WALK_FORWARD) {
         1.0
     } else {
@@ -265,6 +295,10 @@ fn map_user_input(
         if let Some(mut pitch) = pitch {
             pitch.pitch = (pitch.pitch + (mouse_pitch * 0.001)).clamp(-TAU / 4.0, TAU / 8.0);
         }
+    }
+
+    if keyboard.any_just_pressed(RESET_MAZE) {
+        *reset_request = MazeNeedsReset(true);
     }
 }
 

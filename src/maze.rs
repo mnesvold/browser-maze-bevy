@@ -49,7 +49,7 @@ pub struct SpawnPositions {
 }
 
 pub fn generate_walls(
-    commands: &mut Commands,
+    commands: &mut ChildBuilder,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     x_range: RangeInclusive<i32>,
@@ -222,7 +222,7 @@ fn choose_spawn_positions(graph: &Graph<Room, Wall, Undirected>) -> SpawnPositio
 }
 
 fn build_walls(
-    commands: &mut Commands,
+    commands: &mut ChildBuilder,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     x_range: RangeInclusive<i32>,
