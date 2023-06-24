@@ -40,6 +40,7 @@ enum Disposition {
 pub struct Sizes {
     pub room_side_length: f32,
     pub wall_radius: f32,
+    pub room_height: f32,
 }
 
 #[derive(Debug)]
@@ -234,21 +235,24 @@ fn build_walls(
     let (z_min, z_max) = (*z_range.start(), *z_range.end());
 
     let corner_mesh = meshes.add(
-        shape::UVSphere {
+        shape::Cylinder {
             radius: sizes.wall_radius,
-            sectors: 8,
-            stacks: 8,
+            height: sizes.room_height,
+            resolution: 8,
+            segments: 1,
         }
         .into(),
     );
     let corner_material = materials.add(Color::BLUE.into());
 
     let wall_mesh = meshes.add(
-        shape::Cylinder {
-            radius: sizes.wall_radius,
-            height: sizes.room_side_length,
-            resolution: 8,
-            segments: 1,
+        shape::Box {
+            min_x: -sizes.room_side_length / 2.0,
+            max_x: sizes.room_side_length / 2.0,
+            min_y: 0.0,
+            max_y: sizes.room_height,
+            min_z: -sizes.wall_radius,
+            max_z: sizes.wall_radius,
         }
         .into(),
     );
@@ -260,7 +264,6 @@ fn build_walls(
             0.0,
             wall.sw_corner.1 as f32 * sizes.room_side_length,
         );
-        transform.rotate_z(TAU / 4.0);
         match wall.orientation {
             WallOrientation::ParallelToX => {
                 transform.translation += Vec3::X * sizes.room_side_length * 0.5;
@@ -271,17 +274,31 @@ fn build_walls(
             }
         }
 
-        commands.spawn((
-            PbrBundle {
+        commands
+            .spawn((PbrBundle {
                 mesh: wall_mesh.clone(),
                 material: wall_material.clone(),
                 transform,
                 ..default()
-            },
-            Collider::cylinder(sizes.room_side_length * 0.5, sizes.wall_radius),
-        ));
+            },))
+            .with_children(|commands| {
+                // The collider `cuboid` primitive is always *centered* at the origin,
+                // but the mesh above puts the origin at the *bottom* of the wall.
+                commands.spawn((
+                    Collider::cuboid(
+                        sizes.room_side_length / 2.0,
+                        sizes.room_height / 2.0,
+                        sizes.wall_radius,
+                    ),
+                    SpatialBundle {
+                        transform: Transform::from_translation(Vec3::Y * sizes.room_height / 2.0),
+                        ..default()
+                    },
+                ));
+            });
     }
 
+    // Spawn corner columns
     for x in x_min..=x_max {
         for z in z_min..=z_max {
             commands.spawn((
@@ -290,12 +307,12 @@ fn build_walls(
                     material: corner_material.clone(),
                     transform: Transform::from_xyz(
                         x as f32 * sizes.room_side_length,
-                        0.0,
+                        sizes.room_height / 2.0,
                         z as f32 * sizes.room_side_length,
                     ),
                     ..default()
                 },
-                Collider::ball(sizes.wall_radius),
+                Collider::cylinder(sizes.room_height / 2.0, sizes.wall_radius),
             ));
         }
     }

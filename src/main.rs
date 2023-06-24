@@ -179,6 +179,7 @@ fn reset_maze(
                 &Sizes {
                     room_side_length: ROOM_SIDE_LENGTH,
                     wall_radius: 0.1,
+                    room_height: 0.9,
                 },
             );
 
