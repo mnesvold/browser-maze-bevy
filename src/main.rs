@@ -29,6 +29,7 @@ fn main() {
         .add_system(close_on_esc)
         .add_system(map_user_input)
         .add_system(move_avatars.in_schedule(CoreSchedule::FixedUpdate))
+        .add_system(check_goal)
         .add_system(switch_camera)
         .insert_resource(FixedTime::new_from_secs(1.0 / 60.0))
         .run();
@@ -214,6 +215,11 @@ fn reset_maze(
                         material: materials.add(Color::GOLD.into()),
                         ..default()
                     });
+                    children.spawn((
+                        Collider::cylinder(10.0, 0.4 * ROOM_SIDE_LENGTH),
+                        Sensor,
+                        SpatialBundle::default(),
+                    ));
                     children.spawn(PointLightBundle {
                         point_light: PointLight {
                             color: Color::GOLD,
@@ -334,7 +340,7 @@ fn move_avatars(
                             apply_impulse_to_dynamic_bodies: false,
                             snap_to_ground: None,
                         },
-                        QueryFilter::default(),
+                        QueryFilter::default().exclude_sensors(),
                         |_| {},
                     )
                     .effective_translation
@@ -360,6 +366,27 @@ fn move_avatars(
             current_pitch + delta_pitch,
             0.0,
         );
+    }
+}
+
+fn check_goal(
+    query: Query<&Transform, With<Avatar>>,
+    rapier: Res<RapierContext>,
+    mut reset_request: ResMut<MazeNeedsReset>,
+) {
+    let avatar_collider = Collider::cylinder(0.5, 0.4); // TODO -- duplicated from `move_avatars`
+    for xform in &query {
+        if rapier
+            .intersection_with_shape(
+                xform.translation,
+                xform.rotation,
+                &avatar_collider,
+                QueryFilter::default(),
+            )
+            .is_some()
+        {
+            *reset_request = MazeNeedsReset(true);
+        }
     }
 }
 
