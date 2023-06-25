@@ -6,10 +6,16 @@ license = "MIT"
 publish = false
 
 [dependencies]
-bevy = { version = "0.10.1", features = ["dynamic_linking"] }
+bevy = { version = "0.10.1" }
 bevy_rapier3d = { version = "0.21.0", features = ["simd-stable", "debug-render-3d"] }
 petgraph = "0.6.3"
 rand = { version = "0.8.5", default_features = false, features = ["small_rng"] }
+
+# WASM doesn't support building dylibs, which Bevy uses to speed up dev iterations.
+# Restricting the dylib feature to non-WASM targets won't break anything, it'll just
+# slow down the WASM build process.
+[target.'cfg(not(target_family="wasm"))'.dependencies]
+bevy = { version = "0.10.1", features = ["dynamic_linking"] }
 
 [profile.dev]
 opt-level = 1
