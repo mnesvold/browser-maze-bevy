@@ -1,4 +1,4 @@
-name: Rust
+name: Release
 on:
   push:
     branches: [ "release" ]
@@ -9,12 +9,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    - name: Install target
+      run: rustup target add wasm32-unknown-unknown
+    - name: Install tools
+      run: cargo install wasm-bindgen-cli
     - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      run: cargo build --verbose --release --target wasm32-unknown-unknown
+    - name: Generate WASM bindings
+      run: wasm-bindgen --out-name browser_maze_bevy --out-dir www/scripts --target web target/wasm32-unknown-unknown/release/browser-maze-bevy.wasm
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v1
+      with:
+        path: www/
   deploy:
     runs-on: ubuntu-latest
     needs: build

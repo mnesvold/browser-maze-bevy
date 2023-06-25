@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# WARNING! The GitHub CI configuration does *not* delegate to this file.
+# If you edit this file, make sure to keep `.github/workflows/release.yml` in sync.
+
 set -eu
 cd $(dirname $0)
 
