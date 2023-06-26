@@ -1,0 +1,52 @@
+html {
+    width: 100%;
+    height: 100%;
+}
+
+body {
+    background-color: slategray;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    flex-direction: column;
+    justify-content: space-around;
+    align-items: auto;
+    align-content: center;
+}
+
+.has-suspense :not(.suspense) {
+    display: none;
+}
+
+.suspense {
+    text-align: center;
+    font-family: monospace;
+    font-size: xxx-large;
+}
+
+canvas {
+    display: none;
+}
+
+#canvas-container {
+    text-align: center;
+}
+
+#canvas-container canvas {
+    display: inline-block;
+    max-width: 100%;
+}
+
+.card {
+    display: inline-block;
+    background: antiquewhite;
+    padding: 0.5em 1em;
+    border-radius: 0.5em;
+}
+
+kbd {
+    border: thin solid darkgray;
+    padding: 0.2em;
+    border-radius: 0.2em;
+}

@@ -1,5 +1,40 @@
 <!DOCTYPE html>
+<link rel="stylesheet" href="style.css" />
 <script type="module">
     import init from './scripts/browser_maze_bevy.js'
     init('./scripts/browser_maze_bevy_bg.wasm')
+        .catch(() => {
+            // Bindgen throws as part of its control flow;
+            // it is not, in fact, an error.
+        })
+        .then(() => {
+            const canvas = document.getElementsByTagName("canvas")[0]
+            const canvasContainer = document.getElementById("canvas-container")
+            canvasContainer.appendChild(canvas)
+            document.body.classList.remove("has-suspense")
+            for (const el of document.getElementsByClassName("suspense"))
+                el.parentElement.removeChild(el)
+        })
 </script>
+
+<body class="has-suspense">
+    <div class="suspense">
+        Initializing...
+    </div>
+    <div id="canvas-container"></div>
+    <div class="card">
+        <p>
+            Find your way through the maze to the golden goal!
+            When you reach it, you'll be rewarded with a new maze.
+        </p>
+        <p>
+            Click on the canvas above to grant it focus and capture your mouse pointer.
+        </p>
+        <div class="instruction-group">
+            <p><kbd>W</kbd> and <kbd>S</kbd> &mdash; Move</p>
+            <p><kbd>A</kbd> and <kbd>D</kbd> or &#x1f5b1; &mdash; Turn</p>
+            <p><kbd>R</kbd> &mdash; Restart with a new maze</p>
+            <p><kbd>Tab</kbd> &mdash; Show map</p>
+        </div>
+    </div>
+</body>
