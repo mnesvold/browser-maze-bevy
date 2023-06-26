@@ -21,8 +21,7 @@ wasm-bindgen \
     --out-name browser_maze_bevy \
     --out-dir www/scripts \
     --target web \
+    --no-typescript \
     target/wasm32-unknown-unknown/release/browser-maze-bevy.wasm
-
-find www -type f -name '*.ts' -delete
 
 echo "Success! Now copy \`./www\` to your web root."

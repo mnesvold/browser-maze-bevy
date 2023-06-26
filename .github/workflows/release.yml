@@ -16,7 +16,7 @@ jobs:
     - name: Build
       run: cargo build --verbose --release --target wasm32-unknown-unknown
     - name: Generate WASM bindings
-      run: wasm-bindgen --out-name browser_maze_bevy --out-dir www/scripts --target web target/wasm32-unknown-unknown/release/browser-maze-bevy.wasm
+      run: wasm-bindgen --out-name browser_maze_bevy --out-dir www/scripts --target web --no-typescript target/wasm32-unknown-unknown/release/browser-maze-bevy.wasm
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v1
       with:
